@@ -7,14 +7,16 @@ contract Tobasco is ITabasco {
     mapping(uint48 blockNumber => bool submitted) private submitted;
     mapping(address submitter => bool canSubmit) private submitters;
     address public urc;
-    uint256 public slashAmountWei;
+    uint256 public SLASH_AMOUNT_WEI;
+    uint256 public intrinsic_gas_cost;
 
-    constructor(address[] memory _owners, address _urc, uint256 _slashAmountWei) {
+    constructor(address[] memory _owners, address _urc, uint256 _slashAmountWei, uint256 _intrinsic_gas_cost) {
         for (uint256 i = 0; i < _owners.length; i++) {
             _updateSubmitters(_owners[i], true);
         }
         urc = _urc;
-        slashAmountWei = _slashAmountWei;
+        SLASH_AMOUNT_WEI = _slashAmountWei;
+        intrinsic_gas_cost = _intrinsic_gas_cost;
     }
 
     // Slasher function
@@ -29,12 +31,15 @@ contract Tobasco is ITabasco {
     }
 
     // Modifiers
+
+    // @dev When creating the transaction you must set transaction.gasLimit = block.gaslimit
+    // @dev Idea originally from https://x.com/Brechtpd/status/1854192593804177410
     modifier onlyTopOfBlock(uint256 expectedBlockNumber) {
         // Prevent replay attacks
         require(block.number == expectedBlockNumber, "TopOfBlock: block number mismatch");
 
         // Check gas consumption to determine if it's a ToB transaction
-        // todo
+        require(block.gaslimit - gasleft() - intrinsic_gas_cost < 21000, "Not a TopOfBlock transaction");
 
         // Mark the block as submitted
         _recordSubmission(uint48(block.number));
@@ -62,6 +67,10 @@ contract Tobasco is ITabasco {
 
     function _recordSubmission(uint48 blockNumber) internal {
         submitted[blockNumber] = true;
+    }
+
+    function _updateIntrinsicGasCost(uint256 _intrinsic_gas_cost) internal {
+        intrinsic_gas_cost = _intrinsic_gas_cost;
     }
 
     // internal view functions
