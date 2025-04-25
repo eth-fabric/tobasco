@@ -1,66 +1,16 @@
-## Foundry
+## Tobasco
+Tobasco is a proof-of-concept implementation of a preconf protocol that enforces ToB L1 inclusions. 
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### How to enforce Top of Block (ToB) inclusions?
 
-Foundry consists of:
+Assuming the `Preconfer` issued the preconf there are two types of safety faults:
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+1. They included the transaction in a different position in the block, aka the Rest of Block (RoB) 
 
-## Documentation
+    **mitigation**: `onlyTopOfBlock()` modifier reverts if the transaction is not ToB, preventing safety faults
+    
+2. They proposed a block with a *different* transaction at ToB
+    
+    **mitigation**: `onlyTopOfBlock()` did not record a submission during that block and the `Challenger` can slash the `Preconfer` via the [`URC`](https://github.com/eth-fabric/urc) contract.
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+If there's a *liveness fault* and the preconfer misses their slot the `Preconfer` is slashed for the same reason as 2.
