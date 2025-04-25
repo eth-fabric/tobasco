@@ -1,6 +1,8 @@
 ## Tobasco
 Tobasco is a proof-of-concept implementation of a preconf protocol that enforces ToB L1 inclusions. 
 
+![](logo.png)
+
 ### How to enforce Top of Block (ToB) inclusions?
 
 Assuming the `Preconfer` issued the preconf there are two types of safety faults:
