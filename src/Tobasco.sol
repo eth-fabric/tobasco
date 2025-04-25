@@ -9,25 +9,51 @@ contract Tobasco is ITabasco {
     address public urc;
     uint256 public SLASH_AMOUNT_WEI;
     uint256 public intrinsic_gas_cost;
+    uint256 public commitmentType;
 
-    constructor(address[] memory _owners, address _urc, uint256 _slashAmountWei, uint256 _intrinsic_gas_cost) {
+    constructor(
+        address[] memory _owners,
+        address _urc,
+        uint256 _slashAmountWei,
+        uint256 _intrinsic_gas_cost,
+        uint256 _commitmentType
+    ) {
         for (uint256 i = 0; i < _owners.length; i++) {
             _updateSubmitters(_owners[i], true);
         }
         urc = _urc;
         SLASH_AMOUNT_WEI = _slashAmountWei;
         intrinsic_gas_cost = _intrinsic_gas_cost;
+        commitmentType = _commitmentType;
     }
 
     // Slasher function
+
+    // @dev This function is assumed to be called by the URC
+    // @dev The URC should have already checked:
+    // @dev - that the committer signed the commitment
+    // @dev - that the commitment.slasher is this contract
     function slash(
         Delegation calldata delegation,
         Commitment calldata commitment,
         address committer,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountWei) {
-        // todo
+    ) external view returns (uint256 slashAmountWei) {
+        if (msg.sender != urc) revert OnlyURC();
+        if (commitment.commitmentType != commitmentType) revert InvalidCommitmentType();
+
+        // @dev The Preconfer committed to submitting a transaction to this contract at this block number
+        (uint256 blockNumber, address destination) = abi.decode(commitment.payload, (uint256, address));
+
+        // Slash is invalid if the destination is not this contract
+        if (destination != commitment.slasher) revert InvalidDestination();
+
+        // Slash is invalid if a transaction was submitted at this block number
+        if (_wasSubmitted(uint48(blockNumber))) revert CommitmentWasNotBroken();
+
+        // Return the slash amount to the URC slasher
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 
     // Modifiers
@@ -46,14 +72,17 @@ contract Tobasco is ITabasco {
         _;
     }
 
+    // @dev Only whitelisted can submit transactions
+    // @dev It is up to the contract inheriting from this to implement the whitelist
+    // @dev and use this modifier to filter ToB submissions
     modifier onlySubmitter() {
-        require(_canSubmit(msg.sender), "Tobasco: caller is not a submitter");
+        if (!_canSubmit(msg.sender)) revert NotSubmitter();
         _;
     }
 
     // external view functions
     function wasSubmitted(uint48 blockNumber) external view returns (bool) {
-        return submitted[blockNumber];
+        return _wasSubmitted(blockNumber);
     }
 
     function canSubmit(address submitter) external view returns (bool) {
@@ -74,6 +103,10 @@ contract Tobasco is ITabasco {
     }
 
     // internal view functions
+    function _wasSubmitted(uint48 blockNumber) internal view returns (bool) {
+        return submitted[blockNumber];
+    }
+
     function _canSubmit(address submitter) internal view returns (bool) {
         return submitters[submitter];
     }
