@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ITabasco} from "./ITabasco.sol";
+import {ITobasco} from "./ITobasco.sol";
 
-contract Tobasco is ITabasco {
+contract Tobasco is ITobasco {
     mapping(uint48 blockNumber => bool submitted) private submitted;
     mapping(address submitter => bool canSubmit) private submitters;
     address public urc;
     uint256 public SLASH_AMOUNT_WEI;
     uint256 public intrinsic_gas_cost;
-    uint256 public commitmentType;
+    uint64 public commitmentType;
 
     constructor(
         address[] memory _owners,
         address _urc,
         uint256 _slashAmountWei,
         uint256 _intrinsic_gas_cost,
-        uint256 _commitmentType
+        uint64 _commitmentType
     ) {
         for (uint256 i = 0; i < _owners.length; i++) {
             _updateSubmitters(_owners[i], true);
@@ -62,10 +62,10 @@ contract Tobasco is ITabasco {
     // @dev Idea originally from https://x.com/Brechtpd/status/1854192593804177410
     modifier onlyTopOfBlock(uint256 expectedBlockNumber) {
         // Prevent replay attacks
-        require(block.number == expectedBlockNumber, "TopOfBlock: block number mismatch");
+        if (block.number != expectedBlockNumber) revert BlockNumberMismatch();
 
         // Check gas consumption to determine if it's a ToB transaction
-        require(block.gaslimit - gasleft() - intrinsic_gas_cost < 21000, "Not a TopOfBlock transaction");
+        if (block.gaslimit - _gasleft() - intrinsic_gas_cost > 21000) revert NotTopOfBlock();
 
         // Mark the block as submitted
         _recordSubmission(uint48(block.number));
@@ -109,5 +109,9 @@ contract Tobasco is ITabasco {
 
     function _canSubmit(address submitter) internal view returns (bool) {
         return submitters[submitter];
+    }
+
+    function _gasleft() internal virtual returns (uint256) {
+        return gasleft(); // virtual to be overridden in tests
     }
 }
