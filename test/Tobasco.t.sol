@@ -7,19 +7,7 @@ import {ITobasco} from "../src/ITobasco.sol";
 
 import {IRegistry} from "urc/src/IRegistry.sol";
 import {ISlasher} from "urc/src/ISlasher.sol";
-
-contract MockURC {
-    function slashCommitment(
-        IRegistry.RegistrationProof calldata proof,
-        ISlasher.SignedDelegation calldata delegation,
-        ISlasher.SignedCommitment calldata commitment,
-        bytes calldata evidence
-    ) external returns (uint256 slashAmountWei) {
-        return ISlasher(commitment.commitment.slasher).slash(
-            delegation.delegation, commitment.commitment, address(0), evidence, msg.sender
-        );
-    }
-}
+import {MockURC} from "./MockURC.sol";
 
 contract OracleExample is Tobasco {
     uint256 public price;
