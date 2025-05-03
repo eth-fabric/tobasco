@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.8.0 <0.9.0;
+// pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 
@@ -25,30 +26,45 @@ contract TobascoAccountTest is Test {
     uint256 public intrinsicGasCost = 21000;
 
     // Test state variables
-    address signer;
-    uint256 signerPrivateKey;
+    address alice;
+    uint256 alicePrivateKey;
+    uint256 aliceInitialBalance;
+    address bob;
+    uint256 bobPrivateKey;
+    uint256 bobInitialBalance;
     address urc;
 
     function setUp() public {
         urc = address(new MockURC());
-        (signer, signerPrivateKey) = makeAddrAndKey("Signer");
+        (alice, alicePrivateKey) = makeAddrAndKey("alice");
+        (bob, bobPrivateKey) = makeAddrAndKey("bob");
+        aliceInitialBalance = 100 ether;
+        bobInitialBalance = 100 ether;
+        vm.deal(alice, aliceInitialBalance);
+        vm.deal(bob, bobInitialBalance);
+
+        // Create the TobascoAccount instance
         TobascoAccount _tobAccount = new TobascoAccount(urc, slashAmountWei, intrinsicGasCost, commitmentType);
 
-        vm.signAndAttachDelegation(address(_tobAccount), signerPrivateKey);
-        vm.deal(signer, 100 ether);
+        // Alice and Bob both use the TobascoAccount as their 7702 account
+        vm.signAndAttachDelegation(address(_tobAccount), alicePrivateKey);
+        vm.signAndAttachDelegation(address(_tobAccount), bobPrivateKey);
     }
 
     /**
      * @dev Helper function to create a commitment for testing
      * @param _blockNumber The block number for the inclusion commitment
-     * @return commitment The signed commitment structure
+     * @return _commitment The signed commitment structure
      */
-    function commitment(uint256 _blockNumber) public returns (ISlasher.SignedCommitment memory commitment) {
-        commitment = ISlasher.SignedCommitment({
+    function commitment(uint256 _blockNumber, address _signer)
+        public
+        returns (ISlasher.SignedCommitment memory _commitment)
+    {
+        _commitment = ISlasher.SignedCommitment({
             commitment: ISlasher.Commitment({
                 commitmentType: commitmentType,
-                payload: abi.encode(_blockNumber, signer),
-                slasher: address(signer)
+                payload: abi.encode(_blockNumber, _signer),
+                slasher: address(_signer)
             }),
             signature: bytes("")
         });
@@ -88,104 +104,95 @@ contract TobascoAccountTest is Test {
      * @dev Test basic contract deployment with 7702
      */
     function test_deploy() public {
-        require(address(signer).code.length != 0);
-        require(ITobascoAccount(address(signer)).wasSubmitted(uint48(block.number)) == false, "interface works");
+        require(address(alice).code.length != 0);
+        require(ITobascoAccount(address(alice)).wasSubmitted(uint48(block.number)) == false, "interface works");
     }
 
     /**
      * @dev Test basic ETH transfer functionality works despite 7702
      */
     function test_basicTransfer() public {
-        address payable to = payable(makeAddr("to"));
-        vm.prank(signer);
-        to.call{value: 1 ether}("");
-        assertEq(to.balance, 1 ether);
+        vm.prank(alice);
+        (bool success,) = bob.call{value: 1 ether}("");
+        require(success, "transfer failed");
+        assertEq(bob.balance, bobInitialBalance + 1 ether);
+        assertEq(alice.balance, aliceInitialBalance - 1 ether);
     }
 
     /**
-     * @dev Test batch ETH transfer functionality using executeBatch
+     * @dev Test batch ETH transfer functionality using executeBatchWithSig, submitted by a non-owner
      */
-    function test_basicBatchEthTransfer() public {
-        address alice = makeAddr("alice");
-        address bob = makeAddr("bob");
+    function test_executeBatchWithSig() public {
+        address dest1 = makeAddr("dest1");
+        address dest2 = makeAddr("dest2");
 
         // Create two transfer calls
         ITobascoAccount.Call[] memory calls = new ITobascoAccount.Call[](2);
-        calls[0] = ITobascoAccount.Call({to: alice, value: 1 ether, data: ""});
-        calls[1] = ITobascoAccount.Call({to: bob, value: 1 ether, data: ""});
+        calls[0] = ITobascoAccount.Call({to: dest1, value: 1 ether, data: ""});
+        calls[1] = ITobascoAccount.Call({to: dest2, value: 1 ether, data: ""});
 
         // Encode and sign the batch
-        bytes memory signature = signBatch(signerPrivateKey, calls, ITobascoAccount(address(signer)).getNonce());
+        bytes memory signature = signBatch(alicePrivateKey, calls, ITobascoAccount(address(alice)).getNonce());
 
         // Execute the batch
-        vm.prank(bob);
-        ITobascoAccount(address(signer)).executeBatch(calls, signature);
+        vm.prank(bob); // not alice
+        ITobascoAccount(address(alice)).executeBatchWithSig(calls, signature);
 
         // Verify balances
-        assertEq(alice.balance, 1 ether);
-        assertEq(bob.balance, 1 ether);
+        assertEq(dest1.balance, 1 ether);
+        assertEq(dest2.balance, 1 ether);
     }
 
     /**
-     * @dev Test conditional execution of a single call through a 7702-compliant account
+     * @dev Test batch ETH transfers initiated by the owner
      */
-    function test_conditionalExecuteCall() public {
-        // Setup Alice's smart account
-        (address alice, uint256 alicePrivateKey) = makeAddrAndKey("alice");
-        vm.deal(alice, 100 ether);
-        Mock7702Account mock7702Account = new Mock7702Account();
-        vm.signAndAttachDelegation(address(mock7702Account), alicePrivateKey);
-
+    function test_executeBatch() public {
         // Alice pre-signs an ETH transfer to Bob
-        address bob = makeAddr("bob");
-        ITobascoAccount.Call[] memory calls = new ITobascoAccount.Call[](1);
-        calls[0] = ITobascoAccount.Call({to: bob, value: 1 ether, data: ""});
-        bytes memory signature = signBatch(alicePrivateKey, calls, IMock7702Account(address(alice)).getNonce());
+        address dest1 = makeAddr("dest1");
+        address dest2 = makeAddr("dest2");
+        ITobascoAccount.Call[] memory calls = new ITobascoAccount.Call[](2);
+        calls[0] = ITobascoAccount.Call({to: dest1, value: 1 ether, data: ""});
+        calls[1] = ITobascoAccount.Call({to: dest2, value: 1 ether, data: ""});
 
-        // Bob submits the call on behalf of Alice
-        vm.prank(bob);
-        IMock7702Account(address(alice)).conditionalExecuteCall(calls[0], signature);
+        // Alice submits the call
+        vm.prank(alice);
+        ITobascoAccount(address(alice)).executeBatch(calls);
 
         // Verify the transfer was executed
-        assertEq(bob.balance, 1 ether);
+        assertEq(dest1.balance, 1 ether);
+        assertEq(dest2.balance, 1 ether);
     }
 
     /**
-     * @dev Test conditional execution of calls through a 7702-compliant account
-     * This test verifies that a user's pre-signed transaction can be included in a batch
-     * and executed conditionally based on signature verification
+     * @dev Assumes all accounts are TobascoAccounts allowing arbitrary delegation of calls
+     * 1.
      */
-    function test_BatchedConditionalExecuteCall() public {
-        // Bob is the end recipient
-        address bob = makeAddr("bob");
+    function test_nestedBatchExecuteWithSig() public {
+        // Charlie is the end recipient of the eth transfers
+        address charlie = makeAddr("charlie");
 
-        // Setup Alice's smart account
-        (address alice, uint256 alicePrivateKey) = makeAddrAndKey("alice");
-        vm.deal(alice, 100 ether);
-        Mock7702Account mock7702Account = new Mock7702Account();
-        vm.signAndAttachDelegation(address(mock7702Account), alicePrivateKey);
-
-        // Alice pre-signs an ETH transfer to Bob
+        // Bob pre-signs an ETH transfer to Charlie
         ITobascoAccount.Call[] memory subCalls = new ITobascoAccount.Call[](1);
-        subCalls[0] = ITobascoAccount.Call({to: bob, value: 1 ether, data: ""});
-        bytes memory subSignature = signBatch(alicePrivateKey, subCalls, IMock7702Account(address(alice)).getNonce());
+        subCalls[0] = ITobascoAccount.Call({to: charlie, value: 1 ether, data: ""});
+        bytes memory subSignature = signBatch(bobPrivateKey, subCalls, ITobascoAccount(address(bob)).getNonce());
 
-        // Create a batch call that includes Alice's pre-signed transaction
-        ITobascoAccount.Call[] memory calls = new ITobascoAccount.Call[](1);
+        // Encode Bob's eth transfer as an executeBatch() call that will be executed in Alice's batch
+        ITobascoAccount.Call[] memory calls = new ITobascoAccount.Call[](2);
         calls[0] = ITobascoAccount.Call({
-            to: alice,
+            to: bob,
             value: 0,
-            data: abi.encodeCall(Mock7702Account.conditionalExecuteCall, (subCalls[0], subSignature))
+            data: abi.encodeCall(ITobascoAccount.executeBatchWithSig, (subCalls, subSignature))
         });
 
-        // Sign and execute the batch
-        bytes memory signature = signBatch(signerPrivateKey, calls, ITobascoAccount(address(signer)).getNonce());
+        calls[1] = ITobascoAccount.Call({to: charlie, value: 1 ether, data: ""});
 
-        vm.prank(bob);
-        ITobascoAccount(address(signer)).executeBatch(calls, signature);
+        // Execute the batch (no signature required since Alice is the submitter)
+        vm.prank(alice);
+        ITobascoAccount(address(alice)).executeBatch(calls);
 
         // Verify the transfer was executed
         assertEq(alice.balance, 99 ether);
-        assertEq(bob.balance, 1 ether);
+        assertEq(bob.balance, 99 ether);
+        assertEq(charlie.balance, 2 ether);
     }
 }

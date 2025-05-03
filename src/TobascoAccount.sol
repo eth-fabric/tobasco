@@ -24,14 +24,23 @@ contract TobascoAccount is ITobascoAccount {
     }
 
     /**
+     * @notice Executes a batch of calls initiated by the account owner.
+     * @param calls An array of Call structs containing destination, ETH value, and calldata.
+     */
+    function executeBatch(Call[] calldata calls) external {
+        if (msg.sender != address(this)) revert NotOwner();
+        _executeBatch(calls);
+    }
+
+    /**
      * @notice Executes a batch of calls using an off–chain signature.
      * @param calls An array of Call structs containing destination, ETH value, and calldata.
      * @param signature The ECDSA signature over the current nonce and the call data.
      *
      * The signature must be produced off–chain by signing:
-     * The signing key should be the account’s key (which becomes the smart account’s own identity after upgrade).
+     * The signing key should be the account's key (which becomes the smart account's own identity after upgrade).
      */
-    function executeBatch(Call[] calldata calls, bytes calldata signature) external payable {
+    function executeBatchWithSig(Call[] calldata calls, bytes calldata signature) external {
         // Compute the digest that the account was expected to sign.
         bytes memory encodedCalls;
         for (uint256 i = 0; i < calls.length; i++) {
@@ -48,6 +57,43 @@ contract TobascoAccount is ITobascoAccount {
         _executeBatch(calls);
     }
 
+    /**
+     * @notice Executes a batch of calls using an off–chain signature.
+     * @param calls An array of Call structs containing destination, ETH value, and calldata.
+     * @param signature The ECDSA signature over the current nonce and the call data.
+     *
+     * The signature must be produced off–chain by signing:
+     * The signing key should be the account's key (which becomes the smart account's own identity after upgrade).
+     */
+    function executeBatchWithSigToB(Call[] calldata calls, bytes calldata signature)
+        external
+        onlyTopOfBlock(block.number)
+    {
+        // Compute the digest that the account was expected to sign.
+        bytes memory encodedCalls;
+        for (uint256 i = 0; i < calls.length; i++) {
+            encodedCalls = abi.encodePacked(encodedCalls, calls[i].to, calls[i].value, calls[i].data);
+        }
+        bytes32 digest = keccak256(abi.encodePacked(nonce, encodedCalls));
+
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(digest);
+
+        // Recover the signer from the provided signature.
+        address recovered = ECDSA.recover(ethSignedMessageHash, signature);
+        require(recovered == address(this), "Invalid signature");
+
+        _executeBatch(calls);
+    }
+
+    /**
+     * @notice Executes a batch of calls initiated by the account owner.
+     * @param calls An array of Call structs containing destination, ETH value, and calldata.
+     */
+    function executeBatchToB(Call[] calldata calls) external onlyTopOfBlock(block.number) {
+        if (msg.sender != address(this)) revert NotOwner();
+        _executeBatch(calls);
+    }
+
     // @dev This function is assumed to be called by the URC
     // @dev The URC should have already checked:
     // @dev - that the committer signed the commitment
@@ -58,7 +104,7 @@ contract TobascoAccount is ITobascoAccount {
         address committer,
         bytes calldata evidence,
         address challenger
-    ) public view returns (uint256 slashAmountWei) {
+    ) public view returns (uint256) {
         if (msg.sender != urc) revert OnlyURC();
         if (commitment.commitmentType != commitmentType) revert InvalidCommitmentType();
 

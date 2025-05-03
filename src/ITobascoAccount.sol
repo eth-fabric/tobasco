@@ -12,7 +12,10 @@ interface ITobascoAccount is ISlasher {
     }
 
     // External functions
-    function executeBatch(Call[] calldata calls, bytes calldata signature) external payable;
+    function executeBatchWithSig(Call[] calldata calls, bytes calldata signature) external;
+    function executeBatch(Call[] calldata calls) external;
+    function executeBatchWithSigToB(Call[] calldata calls, bytes calldata signature) external;
+    function executeBatchToB(Call[] calldata calls) external;
     function wasSubmitted(uint48 blockNumber) external view returns (bool);
     function getNonce() external view returns (uint256);
     function getCommitmentType() external view returns (uint64);
@@ -30,7 +33,7 @@ interface ITobascoAccount is ISlasher {
     error OnlyURC();
     error InvalidCommitmentType();
     error InvalidDestination();
-    error NotSubmitter();
+    error NotOwner();
     error NotTopOfBlock();
     error BlockNumberMismatch();
 }
