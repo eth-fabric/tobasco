@@ -12,10 +12,10 @@ contract Tobasco is ITobasco {
     // @dev Note that for EIP-7702, the intrinsic gas cost is > 21000
     uint256 private _intrinsicGasCost = 21000;
 
-    function setIntrinsicGasCost(uint256 _intrinsicGasCost) external {
-        if (_intrinsicGasCost < 21000) revert IntrinsicGasCostTooLow();
-        _intrinsicGasCost = _intrinsicGasCost;
-        emit IntrinsicGasCostUpdated(_intrinsicGasCost, _intrinsicGasCost);
+    function setIntrinsicGasCost(uint256 intrinsicGasCost_) external {
+        if (intrinsicGasCost_ < 21000) revert IntrinsicGasCostTooLow();
+        emit IntrinsicGasCostUpdated(_intrinsicGasCost, intrinsicGasCost_);
+        _intrinsicGasCost = intrinsicGasCost_;
     }
 
     // @dev When creating the transaction you must set transaction.gasLimit = block.gaslimit
