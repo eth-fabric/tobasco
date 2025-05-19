@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ISlasher} from "urc/src/ISlasher.sol";
+interface ITobasco {
+    // External functions
+    function setIntrinsicGasCost(uint256 _intrinsicGasCost) external;
 
-interface ITobasco is ISlasher {
     // External view functions
-    function wasSubmitted(uint48 blockNumber) external view returns (bool);
-    function canSubmit(address submitter) external view returns (bool);
+    function submitted(uint48 _timestamp) external view returns (bool);
+    function getIntrinsicGasCost() external view returns (uint256);
+
+    // Events
+    event IntrinsicGasCostUpdated(uint256 oldIntrinsicGasCost, uint256 newIntrinsicGasCost);
+    event TopOfBlockSubmitted(address indexed submitter, uint256 indexed timestamp);
 
     // Errors
-    error CommitmentWasNotBroken();
-    error OnlyURC();
-    error InvalidCommitmentType();
-    error InvalidDestination();
-    error NotSubmitter();
     error NotTopOfBlock();
-    error BlockNumberMismatch();
+    error BlockTimestampMismatch();
+    error IntrinsicGasCostTooLow();
 }

@@ -4,114 +4,51 @@ pragma solidity >=0.8.0 <0.9.0;
 import {ITobasco} from "./ITobasco.sol";
 
 contract Tobasco is ITobasco {
-    mapping(uint48 blockNumber => bool submitted) private submitted;
-    mapping(address submitter => bool canSubmit) private submitters;
-    address public urc;
-    uint256 public SLASH_AMOUNT_WEI;
-    uint256 public intrinsic_gas_cost;
-    uint64 public commitmentType;
+    // @dev A mapping of timestamps that mark if a transaction was submitted ToB
+    mapping(uint48 timestamp => bool submitted) private _submitted;
 
-    constructor(
-        address[] memory _owners,
-        address _urc,
-        uint256 _slashAmountWei,
-        uint256 _intrinsic_gas_cost,
-        uint64 _commitmentType
-    ) {
-        for (uint256 i = 0; i < _owners.length; i++) {
-            _updateSubmitters(_owners[i], true);
-        }
-        urc = _urc;
-        SLASH_AMOUNT_WEI = _slashAmountWei;
-        intrinsic_gas_cost = _intrinsic_gas_cost;
-        commitmentType = _commitmentType;
+    // @dev The default intrinsic gas cost of an L1 transaction
+    // @dev We omit setting this in a constructor as EIP-7702 accounts don't run init code
+    // @dev Note that for EIP-7702, the intrinsic gas cost is > 21000
+    uint256 private _intrinsicGasCost = 21000;
+
+    function setIntrinsicGasCost(uint256 _intrinsicGasCost) external {
+        if (_intrinsicGasCost < 21000) revert IntrinsicGasCostTooLow();
+        _intrinsicGasCost = _intrinsicGasCost;
+        emit IntrinsicGasCostUpdated(_intrinsicGasCost, _intrinsicGasCost);
     }
-
-    // Slasher function
-
-    // @dev This function is assumed to be called by the URC
-    // @dev The URC should have already checked:
-    // @dev - that the committer signed the commitment
-    // @dev - that the commitment.slasher is this contract
-    function slash(
-        Delegation calldata delegation,
-        Commitment calldata commitment,
-        address committer,
-        bytes calldata evidence,
-        address challenger
-    ) external view returns (uint256 slashAmountWei) {
-        if (msg.sender != urc) revert OnlyURC();
-        if (commitment.commitmentType != commitmentType) revert InvalidCommitmentType();
-
-        // @dev The Preconfer committed to submitting a transaction to this contract at this block number
-        (uint256 blockNumber, address destination) = abi.decode(commitment.payload, (uint256, address));
-
-        // Slash is invalid if the destination is not this contract
-        if (destination != commitment.slasher) revert InvalidDestination();
-
-        // Slash is invalid if a transaction was submitted at this block number
-        if (_wasSubmitted(uint48(blockNumber))) revert CommitmentWasNotBroken();
-
-        // Return the slash amount to the URC slasher
-        slashAmountWei = SLASH_AMOUNT_WEI;
-    }
-
-    // Modifiers
 
     // @dev When creating the transaction you must set transaction.gasLimit = block.gaslimit
     // @dev Idea originally from https://x.com/Brechtpd/status/1854192593804177410
-    modifier onlyTopOfBlock(uint256 expectedBlockNumber) {
+    modifier onlyTopOfBlock(uint256 _expectedTimestamp) {
         // Prevent replay attacks
-        if (block.number != expectedBlockNumber) revert BlockNumberMismatch();
+        if (block.timestamp != _expectedTimestamp) revert BlockTimestampMismatch();
 
         // Check gas consumption to determine if it's a ToB transaction
-        if (block.gaslimit - _gasleft() - intrinsic_gas_cost > 21000) revert NotTopOfBlock();
+        if (block.gaslimit - _gasleft() - _intrinsicGasCost > 21000) revert NotTopOfBlock();
 
         // Mark the block as submitted
-        _recordSubmission(uint48(block.number));
-        _;
-    }
-
-    // @dev Only whitelisted can submit transactions
-    // @dev It is up to the contract inheriting from this to implement the whitelist
-    // @dev and use this modifier to filter ToB submissions
-    modifier onlySubmitter() {
-        if (!_canSubmit(msg.sender)) revert NotSubmitter();
+        _recordSubmission(uint48(block.timestamp));
         _;
     }
 
     // external view functions
-    function wasSubmitted(uint48 blockNumber) external view returns (bool) {
-        return _wasSubmitted(blockNumber);
+    function submitted(uint48 _timestamp) external view returns (bool) {
+        return _submitted[_timestamp];
     }
 
-    function canSubmit(address submitter) external view returns (bool) {
-        return _canSubmit(submitter);
+    function getIntrinsicGasCost() external view returns (uint256) {
+        return _intrinsicGasCost;
     }
 
     // internal mutator functions
-    function _updateSubmitters(address _submitter, bool _isSubmitter) internal {
-        submitters[_submitter] = _isSubmitter;
+    function _recordSubmission(uint48 _timestamp) internal {
+        _submitted[_timestamp] = true;
+        emit TopOfBlockSubmitted(msg.sender, _timestamp);
     }
 
-    function _recordSubmission(uint48 blockNumber) internal {
-        submitted[blockNumber] = true;
-    }
-
-    function _updateIntrinsicGasCost(uint256 _intrinsic_gas_cost) internal {
-        intrinsic_gas_cost = _intrinsic_gas_cost;
-    }
-
-    // internal view functions
-    function _wasSubmitted(uint48 blockNumber) internal view returns (bool) {
-        return submitted[blockNumber];
-    }
-
-    function _canSubmit(address submitter) internal view returns (bool) {
-        return submitters[submitter];
-    }
-
+    // @dev This function is virtual to be overridden in tests
     function _gasleft() internal virtual returns (uint256) {
-        return gasleft(); // virtual to be overridden in tests
+        return gasleft();
     }
 }
