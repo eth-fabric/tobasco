@@ -6,6 +6,7 @@ interface ITobasco {
     function setIntrinsicGasCost(uint256 _intrinsicGasCost) external;
 
     // External view functions
+    function submittedBlockhash(uint48 _timestamp) external view returns (bytes32);
     function submitted(uint48 _timestamp) external view returns (bool);
     function getIntrinsicGasCost() external view returns (uint256);
 
