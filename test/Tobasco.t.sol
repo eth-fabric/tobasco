@@ -4,28 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {Tobasco} from "../src/Tobasco.sol";
 import {ITobasco} from "../src/ITobasco.sol";
-
-contract TobascoTester is Tobasco {
-    uint256 public foo;
-    uint256 public gasLeftAmount;
-
-    function update(uint256 _foo, uint256 _timestamp) external onlyTopOfBlock(_timestamp) {
-        foo = _foo;
-    }
-
-    function _gasleft() internal override returns (uint256) {
-        if (gasLeftAmount > 0) {
-            // By default Foundry is consuming gas so the default gasleft()
-            // is too low during unit tests. This is a hack to fix that.
-            return gasLeftAmount;
-        }
-        return gasleft();
-    }
-
-    function setGasLeftAmount(uint256 _gasLeftAmount) public {
-        gasLeftAmount = _gasLeftAmount;
-    }
-}
+import {TobascoTester} from "./Helpers.sol";
 
 contract TobascoTest is Test {
     address alice = makeAddr("Alice");
