@@ -8,6 +8,7 @@ import {ITobasco} from "../src/ITobasco.sol";
 import {IBurn} from "../src/IBurn.sol";
 import {Burn} from "../src/Burn.sol";
 import {ISlasher} from "urc/src/ISlasher.sol";
+import {IRegistry} from "urc/src/IRegistry.sol";
 
 contract BurnTest is UnitTestHelper {
     uint256 slashAmountWei = 1 ether;
@@ -265,5 +266,189 @@ contract BurnTest is UnitTestHelper {
             _signedCommitment,
             bytes("") // invalid signature
         );
+    }
+
+    function test_markGatewaySlashable() public {
+        uint256 blockNumber = block.number;
+
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: blockNumber,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        // Open the challenge
+        burn.openChallenge(_signedDelegation.delegation, _signedCommitment.commitment);
+
+        // Advance past the block number so the blockhash is available
+        vm.roll(blockNumber + 1);
+
+        // Generate the blockhash signature
+        // @dev note that the Gateway would have known the blockhash prior to publication as they were part of its construction
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(gatewayKey, blockhash(blockNumber));
+        bytes memory _blockhashSignature = abi.encodePacked(r, s, v);
+
+        // Attribute a fault
+        burn.attributeGatewayFault(_signedDelegation.delegation, _signedCommitment, _blockhashSignature);
+
+        // Wait for the challenge period to expire
+        vm.warp(block.timestamp + challengeWindowSeconds + 1);
+
+        // Compute the fault ID
+        bytes32 _faultID = keccak256(abi.encode(_signedCommitment));
+
+        // Mark the Gateway as slashable
+        burn.markGatewaySlashable(_faultID);
+        vm.assertEq(burn.gatewaySlashable(_faultID), true, "Gateway should be slashable");
+    }
+
+    function test_markGatewaySlashable_WrongChallengeStatus() public {
+        vm.expectRevert(IBurn.WrongChallengeStatus.selector);
+        burn.markGatewaySlashable(bytes32(0));
+    }
+
+    function test_markGatewaySlashable_ChallengePeriodNotExpired() public {
+        uint256 blockNumber = block.number;
+
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: blockNumber,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        // Open the challenge
+        burn.openChallenge(_signedDelegation.delegation, _signedCommitment.commitment);
+
+        // Advance past the block number so the blockhash is available
+        vm.roll(blockNumber + 1);
+
+        // Generate the blockhash signature
+        // @dev note that the Gateway would have known the blockhash prior to publication as they were part of its construction
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(gatewayKey, blockhash(blockNumber));
+        bytes memory _blockhashSignature = abi.encodePacked(r, s, v);
+
+        // Attribute a fault
+        burn.attributeGatewayFault(_signedDelegation.delegation, _signedCommitment, _blockhashSignature);
+
+        // Compute the fault ID
+        bytes32 _faultID = keccak256(abi.encode(_signedCommitment));
+
+        vm.expectRevert(IBurn.ChallengePeriodNotExpired.selector);
+        burn.markGatewaySlashable(_faultID);
+    }
+
+    function test_slash() public {
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: block.number,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        // Open a challenge
+        bytes32 _challengeID = burn.openChallenge(_signedDelegation.delegation, _signedCommitment.commitment);
+
+        // Wait for the challenge period to expire
+        vm.warp(block.timestamp + challengeWindowSeconds + 1);
+
+        // Call the slash function on the URC
+        IRegistry.RegistrationProof memory proof;
+        uint256 _slashAmount = urc.slashCommitment(proof, _signedDelegation, _signedCommitment, bytes(""));
+
+        assertEq(_slashAmount, slashAmountWei);
+
+        IBurn.Challenge memory _challenge = burn.getChallenge(_challengeID);
+        assert(_challenge.status == IBurn.Status.ProposerFault);
+    }
+
+    function test_slash_OnlyURC() public {
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: block.number,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        vm.prank(user);
+
+        vm.expectRevert(IBurn.OnlyURC.selector);
+        burn.slash(_signedDelegation.delegation, _signedCommitment.commitment, address(0), bytes(""), address(0));
+    }
+
+    function test_slash_WrongChallengeStatus() public {
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: block.number,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        IRegistry.RegistrationProof memory proof;
+
+        // Call the slash function on the URC
+        vm.expectRevert(IBurn.WrongChallengeStatus.selector);
+        uint256 _slashAmount = urc.slashCommitment(proof, _signedDelegation, _signedCommitment, bytes(""));
+    }
+
+    function test_slash_ChallengePeriodNotExpired() public {
+        (ISlasher.SignedCommitment memory _signedCommitment, ISlasher.SignedDelegation memory _signedDelegation) =
+        slashingInputs(
+            SlashingInputs({
+                blockNumber: block.number,
+                commitmentCommitter: gateway,
+                delegationCommitter: gateway,
+                tobasco: address(tobasco),
+                privateKey: gatewayKey,
+                funcSelector: bytes4(keccak256("update(uint256,uint256)")),
+                slasher: address(burn),
+                commitmentType: commitmentType
+            })
+        );
+
+        // Open a challenge
+        bytes32 _challengeID = burn.openChallenge(_signedDelegation.delegation, _signedCommitment.commitment);
+
+        IRegistry.RegistrationProof memory proof;
+
+        // Call the slash function on the URC
+        vm.expectRevert(IBurn.ChallengePeriodNotExpired.selector);
+        uint256 _slashAmount = urc.slashCommitment(proof, _signedDelegation, _signedCommitment, bytes(""));
     }
 }
