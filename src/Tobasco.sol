@@ -20,9 +20,9 @@ contract Tobasco is ITobasco {
 
     // @dev When creating the transaction you must set transaction.gasLimit = block.gaslimit
     // @dev Idea originally from https://x.com/Brechtpd/status/1854192593804177410
-    modifier onlyTopOfBlock(uint256 _expectedTimestamp) {
+    modifier onlyTopOfBlock(uint256 _expectedBlockNumber) {
         // Prevent replay attacks
-        if (block.timestamp != _expectedTimestamp) revert BlockTimestampMismatch();
+        if (block.number != _expectedBlockNumber) revert BlockNumberMismatch();
 
         // Check gas consumption to determine if it's a ToB transaction
         if (block.gaslimit - _gasleft() - _intrinsicGasCost > 21000) revert NotTopOfBlock();

@@ -30,28 +30,28 @@ contract TobascoTest is Test {
         // in the block after initiating the call.
         tobasco.setGasLeftAmount(block.gaslimit - tobasco.getIntrinsicGasCost());
 
-        tobasco.update{gas: block.gaslimit}(100, block.timestamp);
+        tobasco.update{gas: block.gaslimit}(100, block.number);
         assert(tobasco.foo() == 100);
     }
 
     function test_BlockNumberMismatch() public {
-        vm.expectRevert(ITobasco.BlockTimestampMismatch.selector);
-        tobasco.update(100, block.timestamp + 1);
+        vm.expectRevert(ITobasco.BlockNumberMismatch.selector);
+        tobasco.update(100, block.number + 1);
     }
 
     function test_NotTopOfBlock() public {
         vm.deal(alice, 1 ether);
-        uint256 timestamp = block.timestamp;
+        uint256 blockNumber = block.number;
 
         // fill the top of the block
         sendN(10, alice);
 
         // make sure its still the same block
-        assert(block.timestamp == timestamp);
+        assert(block.number == blockNumber);
 
         vm.prank(alice);
         vm.expectRevert(ITobasco.NotTopOfBlock.selector);
-        tobasco.update{gas: block.gaslimit}(100, block.timestamp);
+        tobasco.update{gas: block.gaslimit}(100, block.number);
 
         require(tobasco.foo() == 0);
     }

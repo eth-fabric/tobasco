@@ -12,7 +12,7 @@ contract TobascoTester is Tobasco {
     uint256 public foo;
     uint256 public gasLeftAmount;
 
-    function update(uint256 _foo, uint256 _timestamp) external onlyTopOfBlock(_timestamp) {
+    function update(uint256 _foo, uint256 _blockNumber) external onlyTopOfBlock(_blockNumber) {
         foo = _foo;
     }
 

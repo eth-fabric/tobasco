@@ -15,6 +15,6 @@ interface ITobasco {
 
     // Errors
     error NotTopOfBlock();
-    error BlockTimestampMismatch();
+    error BlockNumberMismatch();
     error IntrinsicGasCostTooLow();
 }
