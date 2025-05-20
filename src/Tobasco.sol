@@ -4,8 +4,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import {ITobasco} from "./ITobasco.sol";
 
 contract Tobasco is ITobasco {
-    // @dev A mapping that saves the blockhash whenever the transaction was submitted at ToB
-    mapping(uint48 timestamp => bytes32 blockhash) private _submitted;
+    // @dev A mapping that saves the block number whenever the transaction was submitted at ToB
+    mapping(uint48 blockNumber => bool submitted) private _submitted;
 
     // @dev The default intrinsic gas cost of an L1 transaction
     // @dev We omit setting this in a constructor as EIP-7702 accounts don't run init code
@@ -28,17 +28,13 @@ contract Tobasco is ITobasco {
         if (block.gaslimit - _gasleft() - _intrinsicGasCost > 21000) revert NotTopOfBlock();
 
         // Mark the block as submitted
-        _recordSubmission(uint48(block.timestamp));
+        _recordSubmission(uint48(block.number));
         _;
     }
 
     // external view functions
-    function submittedBlockhash(uint48 _timestamp) external view returns (bytes32) {
-        return _submitted[_timestamp];
-    }
-
-    function submitted(uint48 _timestamp) external view returns (bool) {
-        return _submitted[_timestamp] != bytes32(0);
+    function submitted(uint48 _blockNumber) external view returns (bool) {
+        return _submitted[_blockNumber];
     }
 
     function getIntrinsicGasCost() external view returns (uint256) {
@@ -46,9 +42,9 @@ contract Tobasco is ITobasco {
     }
 
     // internal mutator functions
-    function _recordSubmission(uint48 _timestamp) internal {
-        _submitted[_timestamp] = blockhash(block.number - 1);
-        emit TopOfBlockSubmitted(msg.sender, _timestamp);
+    function _recordSubmission(uint48 _blockNumber) internal {
+        _submitted[_blockNumber] = true;
+        emit TopOfBlockSubmitted(msg.sender);
     }
 
     // @dev This function is virtual to be overridden in tests

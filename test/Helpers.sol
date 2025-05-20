@@ -58,7 +58,7 @@ contract UnitTestHelper is Test {
     uint256 gatewayKey;
 
     struct SlashingInputs {
-        uint256 timestamp;
+        uint256 blockNumber;
         address commitmentCommitter;
         address delegationCommitter;
         address tobasco;
@@ -97,7 +97,7 @@ contract UnitTestHelper is Test {
         // Create a SignedCommitment
         ISlasher.SignedCommitment memory _signedCommitment = signedCommitment(
             IBurn.ToBCommitment({
-                timestamp: uint48(_slashingInputs.timestamp),
+                blockNumber: uint48(_slashingInputs.blockNumber),
                 tobasco: _slashingInputs.tobasco,
                 funcSelector: _slashingInputs.funcSelector
             }),

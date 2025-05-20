@@ -6,13 +6,12 @@ interface ITobasco {
     function setIntrinsicGasCost(uint256 _intrinsicGasCost) external;
 
     // External view functions
-    function submittedBlockhash(uint48 _timestamp) external view returns (bytes32);
-    function submitted(uint48 _timestamp) external view returns (bool);
+    function submitted(uint48 _blockNumber) external view returns (bool);
     function getIntrinsicGasCost() external view returns (uint256);
 
     // Events
     event IntrinsicGasCostUpdated(uint256 oldIntrinsicGasCost, uint256 newIntrinsicGasCost);
-    event TopOfBlockSubmitted(address indexed submitter, uint256 indexed timestamp);
+    event TopOfBlockSubmitted(address indexed submitter);
 
     // Errors
     error NotTopOfBlock();

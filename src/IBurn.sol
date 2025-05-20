@@ -5,8 +5,8 @@ import {ISlasher} from "urc/src/ISlasher.sol";
 
 interface IBurn is ISlasher {
     struct ToBCommitment {
-        // The timestamp the transaction should have been submitted
-        uint48 timestamp;
+        // The block number the transaction should have been submitted
+        uint48 blockNumber;
         // The address of the ToB contract
         address tobasco;
         // The target function selector committed to being called
@@ -76,7 +76,7 @@ interface IBurn is ISlasher {
     error InvalidBlockHash();
     error InvalidParentBlockHash();
     error TransactionNotIncluded();
-    error IncorrectTimestamp();
+    error IncorrectBlockNumber();
     error IncorrectFunctionSelector();
     error InclusionProofInvalid();
 

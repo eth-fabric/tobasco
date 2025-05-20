@@ -84,7 +84,7 @@ contract Burn is IBurn {
         ToBCommitment memory toBCommitment = abi.decode(_commitment.payload, (ToBCommitment));
 
         // Slashing is only possible if the transaction was not submitted at the specified timestamp
-        if (_wasSubmitted(toBCommitment.timestamp)) {
+        if (_wasSubmitted(toBCommitment.blockNumber)) {
             revert CommitmentWasNotBroken();
         }
 
@@ -253,14 +253,17 @@ contract Burn is IBurn {
         // Decode the commitment payload
         ToBCommitment memory _toBCommitment = abi.decode(_commitment.commitment.payload, (ToBCommitment));
 
-        bytes32 _blockhash = ITobasco(_tobasco).submittedBlockhash(_toBCommitment.timestamp);
+        // Fetch the blockhash from on-chain
+        // @dev note that the Gateway knows the blockhash for the _current_ block
+        // @dev since they were part of its construction
+        bytes32 _blockhash = blockhash(_toBCommitment.blockNumber);
 
         // Verify the Gateway signed the blockhash
         return ECDSA.recover(_blockhash, _signature) == _gateway;
     }
 
-    function _wasSubmitted(uint48 _timestamp) internal view returns (bool) {
-        return ITobasco(_tobasco).submitted(_timestamp);
+    function _wasSubmitted(uint48 _blockNumber) internal view returns (bool) {
+        return ITobasco(_tobasco).submitted(_blockNumber);
     }
 
     function _computeChallengeID(Delegation calldata delegation, Commitment calldata commitment)
@@ -312,9 +315,9 @@ contract Burn is IBurn {
             revert InvalidParentBlockHash();
         }
 
-        // Check that the commitment timestamp matches the block timestamp
-        if (toBCommitment.timestamp != targetBlockHeader.timestamp) {
-            revert IncorrectTimestamp();
+        // Check that the commitment block number matches the block number
+        if (toBCommitment.blockNumber != targetBlockHeader.blockNumber) {
+            revert IncorrectBlockNumber();
         }
 
         // We expect the transaction to be in the 0th position of the block
