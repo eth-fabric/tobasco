@@ -47,7 +47,7 @@ contract Tobasco is ITobasco {
 
     // internal mutator functions
     function _recordSubmission(uint48 _timestamp) internal {
-        _submitted[_timestamp] = blockhash(block.number);
+        _submitted[_timestamp] = blockhash(block.number - 1);
         emit TopOfBlockSubmitted(msg.sender, _timestamp);
     }
 
