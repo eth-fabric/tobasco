@@ -24,6 +24,7 @@ When combined with proposer commitments, this creates a very powerful primitive 
 ### Contracts
 - **`Tobasco.sol`**: Contains the minimal logic to enforce ToB inclusion during execution through the `onlyTopOfBlock()` modifier. Upon successful execution, the modifier will call `_recordSubmission()` which saves a boolean that indicates a ToB transaction was executed during that block. This value is used to help `Burn.sol` determine if a commitment was broken.
 - **`Burn.sol`**: Contains the slasher logic to slash URC-registered proposers who break ToB commitments.
+- **lib/***: Contains helper contracts copied from the [Bolt repo](https://github.com/chainbound/bolt/) 
 
 ### Issuing a Commitment
 We assume a `Preconfer` has signed a [`Commitment`](https://github.com/eth-fabric/urc/blob/5f18225c4d027b49084605129b7666a37ea13412/src/ISlasher.sol#L30) message that includes a `ToBCommitment` struct in its `payload`:
