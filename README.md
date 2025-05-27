@@ -109,4 +109,4 @@ cast send $ADDRESS  --rpc-url 127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba
 ```
 
 ### Disclaimer
-This project is not audited and is not ready for production use. Please see Terms of Use (https://github.com/Commit-Boost/commit-boost-client/blob/main/TERMS-OF-USE.md) for more details.
+This project is not audited and is not ready for production use. Please see [Terms of Use](https://github.com/Commit-Boost/commit-boost-client/blob/main/TERMS-OF-USE.md) for more details.
