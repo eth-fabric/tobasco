@@ -107,3 +107,6 @@ Note if recreating this test, modifying the transaction gas limit in a Foundry s
 ```bash
 cast send $ADDRESS  --rpc-url 127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --gas-limit 30000000 "post(uint256,uint256)" 100 $BLOCKNUM
 ```
+
+### Disclaimer
+This project is not audited and is not ready for production use. Please see Terms of Use (https://github.com/Commit-Boost/commit-boost-client/blob/main/TERMS-OF-USE.md) for more details.
